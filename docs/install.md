@@ -16,7 +16,7 @@ Only **Linux** platforms are supported now. These instructions have been tested 
 ## Install prerequisite packages
 ```
 sudo apt-get update
-sudo apt-get -y install build-essential autoconf libtool libgmp3-dev libssl-dev wget git
+sudo apt-get -y install build-essential autoconf libtool libgmp-dev libssl-dev wget git
 ```
 
 ## Install Erlang
