@@ -9,8 +9,8 @@ let
   libsecp256k1 = secp256k1.secp256k1-2017-12-18;
   contractbuilding = python-packages: with python-packages; [
     requests
-    "py-solc"
-    "py-solc-simple"
+    py-solc
+    py-solc-simple
   ];
   pythonForContracts = python3.withPackages contractbuilding;
 in
