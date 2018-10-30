@@ -29,6 +29,7 @@ defmodule OMG.API.Integration.HappyPathTest do
 
   defp eth, do: Crypto.zero_address()
 
+  @tag :current
   @tag fixtures: [:alice, :bob, :omg_child_chain, :token, :alice_deposits]
   test "deposit, spend, exit, restart etc works fine", %{
     alice: alice,

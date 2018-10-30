@@ -28,6 +28,11 @@ defmodule OMG.Eth.Fixtures do
     :ok
   end
 
+  deffixture exw3(geth) do
+    {:ok, _pid} = ExW3.Contract.start_link()
+    :ok
+  end
+
   deffixture contract(geth) do
     :ok = geth
 

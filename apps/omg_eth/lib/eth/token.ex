@@ -50,7 +50,7 @@ defmodule OMG.Eth.Token do
     defaults = @tx_defaults |> Keyword.put(:gas, 1_590_893)
     opts = defaults |> Keyword.merge(opts)
 
-    bytecode = Eth.get_bytecode!(path_project_root, "MintableToken")
+    {_, bytecode} = Eth.get_abi_and_bytecode!(path_project_root, "MintableToken")
     Eth.deploy_contract(addr, bytecode, [], [], opts)
   end
 

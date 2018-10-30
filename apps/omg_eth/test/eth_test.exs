@@ -54,15 +54,14 @@ defmodule OMG.EthTest do
     assert {:ok, false} = Eth.RootChain.has_token(<<1::160>>, contract.contract_addr)
   end
 
-  @tag fixtures: [:contract]
-  test "binary/integer arugments tx and integer argument call returning a binary/integer tuple", %{contract: contract} do
+  @tag fixtures: [:root_chain_contract_config, :contract]
+  test "binary/integer arguments tx and integer argument call returning a binary/integer tuple", %{contract: contract} do
     assert {:ok, _} =
              Eth.RootChain.submit_block(
                <<234::256>>,
                1,
                20_000_000_000,
-               contract.authority_addr,
-               contract.contract_addr
+               contract.authority_addr
              )
              |> Eth.DevHelpers.transact_sync!()
 
@@ -72,10 +71,12 @@ defmodule OMG.EthTest do
     assert is_integer(child_chain_time)
   end
 
-  @tag fixtures: [:contract]
+
+  @tag fixtures: [:contract, :root_chain_contract_config]
+  @tag :current
   test "gets events with various fields and topics", %{contract: contract} do
     {:ok, _} =
-      Eth.RootChain.deposit(1, contract.authority_addr, contract.contract_addr)
+      Eth.RootChain.deposit(1, contract.authority_addr)
       |> Eth.DevHelpers.transact_sync!()
 
     {:ok, height} = Eth.get_ethereum_height()

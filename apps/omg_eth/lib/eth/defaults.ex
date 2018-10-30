@@ -29,4 +29,8 @@ defmodule OMG.Eth.Defaults do
     [value: 0, gasPrice: @gas_price, gas: @lots_of_gas]
     |> Enum.map(fn {k, v} -> {k, to_hex(v)} end)
   end
+
+  def tx_defaults_raw() do
+    [value: 0, gasPrice: @gas_price, gas: @lots_of_gas]
+  end
 end

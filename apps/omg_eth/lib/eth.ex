@@ -33,6 +33,18 @@ defmodule OMG.Eth do
   @type address :: <<_::160>>
   @type hash :: <<_::256>>
 
+  def register!(contract_module, contract_name, contract_addr, path_project_root \\ nil) do
+    default_path = __DIR__ |> Path.join("../../../") |> Path.expand()
+    path_project_root = path_project_root || default_path
+
+    :ok =
+      get_abi_and_bytecode!(path_project_root, contract_name)
+      |> elem(0)
+      |> (&ExW3.Contract.register(contract_module, abi: &1)).()
+
+    ExW3.Contract.at(contract_module, to_hex(contract_addr))
+  end
+
   def get_ethereum_height do
     case Ethereumex.HttpClient.eth_block_number() do
       {:ok, "0x" <> height_hex} ->
@@ -80,13 +92,22 @@ defmodule OMG.Eth do
     |> Enum.into(opts, fn {k, v} -> {k, to_hex(v)} end)
   end
 
-  def get_bytecode!(path_project_root, contract_name) do
-    %{"evm" => %{"bytecode" => %{"object" => bytecode}}} =
+  def get_abi_and_bytecode!(path_project_root, contract_name) do
+    %{
+      "abi" => abi_list,
+      "evm" => %{
+        "bytecode" => %{
+          "object" => bytecode
+        }
+      }
+    } =
       path_project_root
       |> read_contracts_json!(contract_name)
-      |> Poison.decode!()
+      |> Poison.Parser.parse!()
 
-    "0x" <> bytecode
+    abi = ExW3.reformat_abi(abi_list)
+
+    {abi, "0x" <> bytecode}
   end
 
   defp encode_tx_data(signature, args) do
@@ -115,9 +136,9 @@ defmodule OMG.Eth do
   end
 
   defp read_contracts_json!(path_project_root, contract_name) do
-    path = "contracts/build/#{contract_name}.json"
+    path = Path.join(path_project_root, "contracts/build/#{contract_name}.json")
 
-    case File.read(Path.join(path_project_root, path)) do
+    case File.read(path) do
       {:ok, contract_json} ->
         contract_json
 

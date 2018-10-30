@@ -27,44 +27,62 @@ defmodule OMG.Eth.RootChain do
 
   @type optional_addr_t() :: <<_::160>> | nil
 
+  def register(contract \\ nil) do
+    contract_address = contract || from_hex(Application.get_env(:omg_eth, :contract_addr))
+    OMG.Eth.register!(__MODULE__, "RootChain", contract_address)
+    Task.start_link(fn -> :ok end)
+  end
+
   @spec submit_block(binary, pos_integer, pos_integer, optional_addr_t(), optional_addr_t()) ::
           {:error, binary() | atom() | map()}
           | {:ok, binary()}
-  def submit_block(hash, nonce, gas_price, from \\ nil, contract \\ nil) do
-    contract = contract || from_hex(Application.get_env(:omg_eth, :contract_addr))
+  def submit_block(hash, nonce, gas_price, from \\ nil, contract \\ __MODULE__) do
     from = from || from_hex(Application.get_env(:omg_eth, :authority_addr))
 
     # NOTE: we're not using any defaults for opts here!
-    Eth.contract_transact(
-      from,
+    with {:ok, tx_hash} <- ExW3.Contract.send(
       contract,
-      "submitBlock(bytes32)",
+      :submitBlock,
       [hash],
-      nonce: nonce,
-      gasPrice: gas_price,
-      value: 0,
-      gas: 100_000
-    )
+      %{
+        from: from |> to_hex(),
+        nonce: nonce,
+        gasPrice: gas_price,
+        value: 0,
+        gas: 100_000
+      }
+    ), do: {:ok, from_hex(tx_hash)}
+
   end
 
-  def start_deposit_exit(deposit_positon, token, value, from, contract \\ nil, opts \\ []) do
-    defaults = @tx_defaults |> Keyword.put(:gas, 1_000_000)
-    opts = defaults |> Keyword.merge(opts)
+  def start_deposit_exit(deposit_position, token, value, from, contract \\ nil, opts \\ []) do
+    defaults =
+      OMG.Eth.Defaults.tx_defaults_raw()
+      |> Keyword.put(:gas, 1_000_000)
 
-    contract = contract || from_hex(Application.get_env(:omg_eth, :contract_addr))
+    opts =
+      defaults
+      |> Keyword.merge(opts)
+      |> Keyword.put(:from, to_hex(from))
+      |> Map.new()
 
-    Eth.contract_transact(
-      from,
-      contract,
-      "startDepositExit(uint256,address,uint256)",
-      [deposit_positon, token, value],
+    with {:ok, tx_hash} <- ExW3.Contract.send(
+      __MODULE__,
+      :startDepositExit,
+      [deposit_position, token, value],
       opts
-    )
+    ), do: {:ok, from_hex(tx_hash)}
+
   end
 
   def start_exit(utxo_position, txbytes, proof, sigs, from, contract \\ nil, opts \\ []) do
-    defaults = @tx_defaults |> Keyword.put(:gas, 1_000_000)
-    opts = defaults |> Keyword.merge(opts)
+    defaults =
+      @tx_defaults
+      |> Keyword.put(:gas, 1_000_000)
+
+    opts =
+      defaults
+      |> Keyword.merge(opts)
 
     contract = contract || from_hex(Application.get_env(:omg_eth, :contract_addr))
 
@@ -77,21 +95,30 @@ defmodule OMG.Eth.RootChain do
     )
   end
 
-  def deposit(value, from, contract \\ nil, opts \\ []) do
-    defaults = @tx_defaults |> Keyword.put(:gas, 80_000)
+  def deposit(value, from, contract \\ __MODULE__, opts \\ []) do
+    defaults =
+      OMG.Eth.Defaults.tx_defaults_raw()
+      |> Keyword.put(:gas, 80_000)
 
     opts =
       defaults
       |> Keyword.merge(opts)
-      |> Keyword.put(:value, value)
+      |> Keyword.merge([value: value, from: to_hex(from)])
+      |> Map.new()
 
-    contract = contract || from_hex(Application.get_env(:omg_eth, :contract_addr))
-    Eth.contract_transact(from, contract, "deposit()", [], opts)
+    with {:ok, tx_hash} <- ExW3.Contract.send(contract, :deposit, [], opts), do:
+      {:ok, from_hex(tx_hash)}
+
   end
 
   def deposit_token(from, token, amount, contract \\ nil, opts \\ []) do
-    defaults = @tx_defaults |> Keyword.put(:gas, 150_000)
-    opts = defaults |> Keyword.merge(opts)
+    defaults =
+      @tx_defaults
+      |> Keyword.put(:gas, 150_000)
+
+    opts =
+      defaults
+      |> Keyword.merge(opts)
 
     contract = contract || from_hex(Application.get_env(:omg_eth, :contract_addr))
     signature = "depositFrom(address,uint256)"
@@ -99,7 +126,9 @@ defmodule OMG.Eth.RootChain do
   end
 
   def add_token(token, contract \\ nil, opts \\ []) do
-    opts = @tx_defaults |> Keyword.merge(opts)
+    opts =
+      @tx_defaults
+      |> Keyword.merge(opts)
 
     contract = contract || from_hex(Application.get_env(:omg_eth, :contract_addr))
     {:ok, [from | _]} = Ethereumex.HttpClient.eth_accounts()
@@ -108,7 +137,9 @@ defmodule OMG.Eth.RootChain do
   end
 
   def challenge_exit(cutxopo, eutxoindex, txbytes, proof, sigs, from, contract \\ nil, opts \\ []) do
-    opts = @tx_defaults |> Keyword.merge(opts)
+    opts =
+      @tx_defaults
+      |> Keyword.merge(opts)
 
     contract = contract || from_hex(Application.get_env(:omg_eth, :contract_addr))
     signature = "challengeExit(uint256,uint256,bytes,bytes,bytes)"
@@ -117,10 +148,12 @@ defmodule OMG.Eth.RootChain do
   end
 
   def create_new(path_project_root, addr, opts \\ []) do
-    opts = @tx_defaults |> Keyword.merge(opts)
+    opts =
+      @tx_defaults
+      |> Keyword.merge(opts)
 
-    bytecode = Eth.get_bytecode!(path_project_root, "RootChain")
-    Eth.deploy_contract(addr, bytecode, [], [], opts)
+    {_, bytecode} = Eth.get_abi_and_bytecode!(path_project_root, "RootChain")
+    {:ok, addr} = Eth.deploy_contract(addr, bytecode, [], [], opts)
   end
 
   ########################
@@ -271,7 +304,9 @@ defmodule OMG.Eth.RootChain do
     # the back&forth is just the dumb but natural way to go about Ethereumex/Eth APIs conventions for encoding
     hex_contract = to_hex(contract)
 
-    case txhash |> to_hex() |> Ethereumex.HttpClient.eth_get_transaction_receipt() do
+    case txhash
+         |> to_hex()
+         |> Ethereumex.HttpClient.eth_get_transaction_receipt() do
       {:ok, %{"contractAddress" => ^hex_contract, "blockNumber" => "0x" <> height_hex}} ->
         {height, ""} = Integer.parse(height_hex, 16)
         {:ok, height}

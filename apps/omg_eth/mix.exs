@@ -21,7 +21,8 @@ defmodule OMG.Eth.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger, :ethereumex],
+      mod: {OMG.Eth.Application, []}
     ]
   end
 
@@ -38,6 +39,7 @@ defmodule OMG.Eth.MixProject do
       #       then there's some unexpected behavior of mix that won't allow to mix these, see
       #       [here](https://elixirforum.com/t/mix-dependency-is-not-locked-error-when-building-with-edeliver/7069/3)
       {:briefly, "~> 0.3"},
+      {:poison, "~> 3.0", override: true},
       {:exw3, "~> 0.4.2"},
       {
         :plasma_contracts,
