@@ -40,20 +40,19 @@ defmodule OMG.Watcher.Web.View.Transaction do
   end
 
   defp render_transaction(transaction) do
-    block = transaction.block
-
     {:ok,
      %Transaction.Signed{
        raw_tx: tx,
-       sig1: sig1,
-       sig2: sig2
+       # FIXME: Does order of sigs matter?
+       sigs: [sig1, sig2]
      } = signed} = Transaction.Signed.decode(transaction.txbytes)
 
     {:ok,
      %Transaction.Recovered{
-       spender1: spender1,
-       spender2: spender2
+       spenders: [spender1, spender2]
      }} = Transaction.Recovered.recover_from(signed)
+
+    block = transaction.block
 
     tx
     |> Map.merge(%{

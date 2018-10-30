@@ -47,6 +47,18 @@ defmodule OMG.API.Core do
   end
 
   defp valid?(%Transaction.Signed{
+         raw_tx: %Transaction{inputs: inputs},
+         sigs: sigs
+       }) do
+    with :ok <- inputs_present?(inputs),
+         :ok <- no_duplicate_inputs?(inputs),
+         :ok <- no_missing_signatures?(inputs, sigs),
+         :ok <- no_surplus_signatures?(inputs, sigs) do
+      :ok
+    end
+  end
+
+  defp valid?(%Transaction.Signed{
          raw_tx: %Transaction{
            blknum1: 0,
            txindex1: 0,

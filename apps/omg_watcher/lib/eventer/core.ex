@@ -51,12 +51,11 @@ defmodule OMG.Watcher.Eventer.Core do
   defp get_address_spent_events(
          %{
            tx: %Transaction.Recovered{
-             spender1: spender1,
-             spender2: spender2
+             spenders: spenders
            }
          } = event_trigger
        ) do
-    [spender1, spender2]
+    spenders
     |> Enum.filter(&Transaction.account_address?/1)
     |> Enum.map(&create_address_spent_event(event_trigger, &1))
     |> Enum.uniq()
@@ -70,11 +69,12 @@ defmodule OMG.Watcher.Eventer.Core do
   defp get_address_received_events(
          %{
            tx: %Transaction.Recovered{
-             signed_tx: %Transaction.Signed{raw_tx: %Transaction{newowner1: newowner1, newowner2: newowner2}}
+             signed_tx: %Transaction.Signed{raw_tx: %Transaction{outputs: outputs}}
            }
          } = event_trigger
        ) do
-    [newowner1, newowner2]
+    outputs
+    |> Enum.map(fn [owner: owner] -> owner end)
     |> Enum.filter(&Transaction.account_address?/1)
     |> Enum.map(&create_address_received_event(event_trigger, &1))
     |> Enum.uniq()

@@ -23,35 +23,27 @@ defmodule OMG.API.State.Transaction do
   @zero_address Crypto.zero_address()
   @max_inputs 2
 
-  defstruct [
-    :blknum1,
-    :txindex1,
-    :oindex1,
-    :blknum2,
-    :txindex2,
-    :oindex2,
-    :cur12,
-    :newowner1,
-    :amount1,
-    :newowner2,
-    :amount2
-  ]
+  defstruct [:inputs, :outputs]
 
   @type t() :: %__MODULE__{
-          blknum1: non_neg_integer(),
-          txindex1: non_neg_integer(),
-          oindex1: 0 | 1,
-          blknum2: non_neg_integer(),
-          txindex2: non_neg_integer(),
-          oindex2: 0 | 1,
-          cur12: currency(),
-          newowner1: Crypto.address_t(),
-          amount1: pos_integer(),
-          newowner2: Crypto.address_t(),
-          amount2: non_neg_integer()
+          inputs: list(input()),
+          outputs: list(output())
         }
 
-  @type currency :: Crypto.address_t()
+  @type currency() :: Crypto.address_t()
+
+  @type input() :: [
+          blknum: non_neg_integer(),
+          txindex: non_neg_integer(),
+          oindex: non_neg_integer(),
+          currency: currency()
+        ]
+
+  @type output() :: [
+          owner: Crypto.address_t(),
+          currency: currency(),
+          amount: non_neg_integer()
+        ]
 
   @doc """
   Creates transaction from utxo positions and outputs. Provides simple, stateless validation on arguments.
@@ -67,7 +59,7 @@ defmodule OMG.API.State.Transaction do
             %{
               blknum: pos_integer(),
               txindex: non_neg_integer(),
-              oindex: 0 | 1,
+              oindex: non_neg_integer(),
               currency: Crypto.address_t(),
               amount: pos_integer()
             }
@@ -122,7 +114,7 @@ defmodule OMG.API.State.Transaction do
       else: {:error, :amount_noninteger_or_negative}
   end
 
-  defp amounts_add_up?(inputs, outputs, fee) do
+  defp amounts_add_up?(inputs, outputs, fees) do
     spent =
       inputs
       |> Enum.map(& &1.amount)
@@ -194,19 +186,19 @@ defmodule OMG.API.State.Transaction do
   def account_address?(address) when is_binary(address) and byte_size(address) == 20, do: true
   def account_address?(_), do: false
 
-  def encode(tx) do
+  def encode(%Transaction{inputs: [input1, input2], outputs: [output1, output2]}) do
     [
-      tx.blknum1,
-      tx.txindex1,
-      tx.oindex1,
-      tx.blknum2,
-      tx.txindex2,
-      tx.oindex2,
-      tx.cur12,
-      tx.newowner1,
-      tx.amount1,
-      tx.newowner2,
-      tx.amount2
+      input1.blknum,
+      input1.txindex,
+      input1.oindex,
+      input2.blknum,
+      input2.txindex,
+      input2.oindex,
+      input1.currency,
+      output1.owner,
+      output1.amount,
+      output2.owner,
+      output2.amount
     ]
     |> ExRLP.encode()
   end
@@ -236,4 +228,13 @@ defmodule OMG.API.State.Transaction do
 
   defp signature(_encoded_tx, <<>>), do: <<0::size(520)>>
   defp signature(encoded_tx, priv), do: Crypto.signature(encoded_tx, priv)
+
+  @doc """
+  Returns all input currencies
+  """
+  @spec get_currencies(t()) :: list(currency())
+  def get_currencies(tx) do
+    tx.inputs
+    |> Enum.map(& &1.currency)
+  end
 end

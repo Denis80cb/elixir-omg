@@ -46,16 +46,17 @@ defmodule OMG.Watcher.Challenger.Core do
     {:ok,
      %Transaction.Signed{
        raw_tx: raw_tx,
-       sig1: sig1,
-       sig2: sig2
+       sigs: sigs
      }} = Transaction.Signed.decode(challenging_tx.txbytes)
+
+    sigs = Enum.reduce(sigs, &<>/2)
 
     Challenge.create(
       cutxopos,
       eutxoindex,
       Transaction.encode(raw_tx),
       proof,
-      sig1 <> sig2
+      sigs
     )
   end
 
