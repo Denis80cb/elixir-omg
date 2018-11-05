@@ -136,15 +136,14 @@ defmodule OMG.API.State.Core do
           | {{:error, exec_error}, t()}
   def exec(
         %Transaction.Recovered{
-          signed_tx: %Transaction.Signed{raw_tx: raw_tx},
-          spenders: spenders
+          signed_tx: %Transaction.Signed{raw_tx: raw_tx}
         } = recovered_tx,
         fees,
         state
       ) do
     with :ok <- validate_block_size(state),
-         {:ok, amounts_by_currency} <- correct_inputs?(state, raw_tx, spenders),
-         :ok <- amounts_add_up?(amounts_by_currency, fees) do
+         {:ok, input_amounts_by_currency} <- correct_inputs?(state, recoverd_tx),
+         :ok <- amounts_add_up?(input_amounts_by_currency, recovered_tx, fees) do
       {:ok, {recovered_tx.signed_tx_hash, state.height, state.tx_index},
        state
        |> apply_spend(raw_tx)
@@ -162,54 +161,59 @@ defmodule OMG.API.State.Core do
     }
   end
 
-  defp correct_inputs?(%Core{utxos: utxos} = state, %Transaction{inputs: inputs} = tx, spenders) do
-    with :ok <- inputs_belong_to_spenders?(utxos, inputs) do
-      amounts_with_currency =
-        for [blknum: blknum, txindex: txindex, oindex: oindex, currency: currency] <- inputs do
-          with :ok <- utxo_not_from_the_future_block?(state, blknum) do
-            check_utxo_and_extract_amount(state, Utxo.position(blknum, txindex, oindex), currency)
-          end
-        end
-
-      get_amounts_by_currency(amounts_with_currency)
-    end
-  end
-
-  defp inputs_belong_to_spenders?(utxos, inputs, spenders) do
-    :ok
-  end
-
-  defp get_amounts_by_currency(amount_with_currency) do
-    {:ok, %{}}
-  end
-
-  # if there's no spender, make sure we cannot spend, but everything's valid
-  defp correct_input_in_position?(_, _, _, nil), do: {:ok, 0}
-
-  defp correct_input_in_position?(
-         1,
-         state,
-         %Transaction{blknum1: blknum, txindex1: txindex, oindex1: oindex, cur12: spent_cur},
-         spender
+  defp correct_inputs?(
+         %Core{utxos: utxos} = state,
+         %Transaction.Recovered{
+           signed_tx: %Transaction.Signed{raw_tx: raw_tx}
+         } = recovered_tx,
+         spenders
        ) do
-    with :ok <- utxo_not_from_the_future_block?(state, blknum) do
-      check_utxo_and_extract_amount(state, Utxo.position(blknum, txindex, oindex), spent_cur)
+    inputs = Transaction.get_inputs(raw_tx)
+
+    with :ok <- inputs_not_from_future_block?(state, inputs),
+         {:ok, inputs} <- inputs_belong_to_spenders?(utxos, inputs) do
+      {:ok, get_amounts_by_currency(inputs)}
     end
   end
 
-  defp check_utxo_and_extract_amount(%Core{utxos: utxos}, position, spent_cur) do
-    with {:ok, %Utxo{owner: owner, currency: cur, amount: owner_has}} <- get_utxo(utxos, position),
-         :ok <- same_currency?(cur, spent_cur),
-         do: {:ok, {spent_cur, owner_has}}
+  defp inputs_not_from_future_blocks?(%__MODULE__{height: blknum}, inputs) do
+    no_utxo_from_future_block =
+      inputs
+      |> Enum.all?(fn [blknum: input_blknum] -> blknum >= input_blknum end)
+
+    if no_utxo_from_future_block, do: :ok, else: {:error, :input_utxo_ahead_of_state}
   end
 
-  defp utxo_not_from_the_future_block?(%__MODULE__{height: blknum}, input_blknum) do
-    if blknum >= input_blknum do
-      :ok
-    else
-      {:error, :input_utxo_ahead_of_state}
+  defp inputs_belong_to_spenders?(
+         utxos,
+         %Transaction.Recovered{
+           signed_tx: %Transaction.Signed{raw_tx: raw_tx}
+         } = recovered_tx
+       ) do
+    inputs = Transaction.get_inputs(raw_tx)
+
+    with {:ok, input_utxos} <- get_input_utxos(utxos, inputs),
+         input_utxos_owners <- Enum.map(input_utxos, fn %{owner: owner} -> owner end),
+         :authorized <- Transaction.Recovered.spent_authorized?(recovered_tx, input_utxos_owners) do
+      {:ok, input_utxos}
     end
   end
+
+  defp get_input_utxos(utxos, inputs) do
+    input_utxos =
+      for %{blknum: blknum, txindex: txindex, oindex: oindex} <- inputs do
+        get_utxo(utxos, Utxo.position(blknum, txindex, oindex))
+      end
+
+    input_utxos
+    |> Enum.reduce([], &extract_utxo_or_error/2)
+  end
+
+  defp extract_utxo_or_error({:ok, input_utxos}, {:ok, input_utxo}), do: {:ok, [input_utxo | input_utxos]}
+
+  defp extract_utxo_or_error({:ok, input_utxos}, {:error, _} = error), do: error
+
+  defp extract_utxo_or_error({:error, _} = error, _), do: error
 
   defp get_utxo(utxos, position) do
     case Map.get(utxos, position) do
@@ -218,12 +222,10 @@ defmodule OMG.API.State.Core do
     end
   end
 
-  defp is_spender?(owner, spender) do
-    if owner == spender, do: :ok, else: {:error, :incorrect_spender}
-  end
-
-  defp same_currency?(utxo_currency, spent_currency) do
-    if utxo_currency == spent_currency, do: :ok, else: {:error, :incorrect_currency}
+  defp get_amounts_by_currency(utxos) do
+    utxos
+    |> Enum.group_by(fn %{currency: currency} -> currency end)
+    |> Enum.map(fn amounts -> Enum.reduce(amounts, 0, fn amount, acc -> amount + acc end) end)
   end
 
   # fee is implicit - it's the difference between funds owned and spend

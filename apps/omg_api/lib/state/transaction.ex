@@ -35,8 +35,7 @@ defmodule OMG.API.State.Transaction do
   @type input() :: [
           blknum: non_neg_integer(),
           txindex: non_neg_integer(),
-          oindex: non_neg_integer(),
-          currency: currency()
+          oindex: non_neg_integer()
         ]
 
   @type output() :: [
@@ -186,7 +185,7 @@ defmodule OMG.API.State.Transaction do
   def account_address?(address) when is_binary(address) and byte_size(address) == 20, do: true
   def account_address?(_), do: false
 
-  def encode(%Transaction{inputs: [input1, input2], outputs: [output1, output2]}) do
+  def encode(%__MODULE__{inputs: [input1, input2], outputs: [output1, output2]}) do
     [
       input1.blknum,
       input1.txindex,
@@ -194,7 +193,7 @@ defmodule OMG.API.State.Transaction do
       input2.blknum,
       input2.txindex,
       input2.oindex,
-      input1.currency,
+      output1.currency,
       output1.owner,
       output1.amount,
       output2.owner,
@@ -222,7 +221,7 @@ defmodule OMG.API.State.Transaction do
     signature1 = signature(encoded_tx, priv1)
     signature2 = signature(encoded_tx, priv2)
 
-    transaction = %Signed{raw_tx: tx, sig1: signature1, sig2: signature2}
+    transaction = %Signed{raw_tx: tx, sigs: [signature1, signature2]}
     %{transaction | signed_tx_bytes: Signed.encode(transaction)}
   end
 
@@ -236,5 +235,21 @@ defmodule OMG.API.State.Transaction do
   def get_currencies(tx) do
     tx.inputs
     |> Enum.map(& &1.currency)
+  end
+
+  @doc """
+  Returns all inputs
+  """
+  @spec get_inputs(t()) :: list(inputs())
+  def get_inputs(tx) do
+    tx.inputs
+  end
+
+  @doc """
+  Returns all outputs
+  """
+  @spec get_outputs(t()) :: list(outputs())
+  def get_outputs(tx) do
+    tx.outputs
   end
 end

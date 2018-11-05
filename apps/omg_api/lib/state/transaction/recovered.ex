@@ -48,4 +48,12 @@ defmodule OMG.API.State.Transaction.Recovered do
 
   defp get_spender(_hash_no_spenders, @empty_signature), do: {:ok, nil}
   defp get_spender(hash_no_spenders, sig), do: Crypto.recover_address(hash_no_spenders, sig)
+
+  @doc """
+  Checks if given spenders signed the transaction
+  """
+  @spec check_spenders_authorized(t(), list()) :: :ok
+  def check_spenders_authorized(%__MODULE__{} = tx, inputs_spenders) do
+    :ok
+  end
 end
